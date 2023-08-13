@@ -1,102 +1,84 @@
-import React, { Component } from 'react';
+import { useState } from 'react';
+import { nanoid } from 'nanoid';
+
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import { toastifyOptions } from 'utils/toastifyOptions';
+
 import { GlobalStyle } from './GlobalStyle';
 import { Layout } from './Layout/Layout';
 import { Section } from './Section/Section';
+import { Title } from './Title/Title';
+
 import { ContactForm } from './ContactForm/ContactForm';
-import initialContacts from './contacts.json';
-import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
 import { ContactList } from './ContactList/ContactList';
-import { Header } from './Header/Header';
+
 import Filter from './Filter/Filter';
 
-const notifyOptions = {
-  position: 'bottom-left',
-  autoClose: 5000,
-  hideProgressBar: false,
-  closeOnClick: true,
-  pauseOnHover: true,
-  draggable: true,
-  progress: undefined,
-  theme: 'colored',
-};
+import initialContacts from 'data/contacts.json';
+import useLocalStorage from 'hooks/useLocalStorage';
 
-export default class App extends Component {
-  state = {
-    contacts: initialContacts,
-    filter: '',
-  };
+export default function App() {
+  const [contacts, setContacts] = useLocalStorage('contacts', initialContacts);
+  const [filter, setFilter] = useState('');
 
-  componentDidMount() {
-    const contactsFromLS = localStorage.getItem('contacts');
-    const parsedContacts = JSON.parse(contactsFromLS);
-    if (!parsedContacts) return;
-    this.setState({ contacts: parsedContacts });
-  }
+  const addContact = newContact => {
+    const isExist = contacts.some(
+      ({ name, number }) =>
+        name.toLowerCase().trim() === newContact.name.toLowerCase().trim() ||
+        number.trim() === newContact.number.trim()
+    );
 
-  componentDidUpdate(prevProps, prevState) {
-    if (this.state.contacts !== prevState.contacts) {
-      localStorage.setItem('contacts', JSON.stringify(this.state.contacts));
+    if (isExist) {
+      return toast.error(
+        `${newContact.name}: is already in contacts`,
+        toastifyOptions
+      );
     }
-  }
 
-  addContact = newContact => {
-
-    const { contacts } = this.state;
-
-    contacts.some(
-      contact =>
-        contact.name.toLowerCase().trim() ===
-          newContact.name.toLowerCase().trim() ||
-        contact.number.trim() === newContact.number.trim()
-    )
-      ? toast.error(`${newContact.name}: is already in contacts`, notifyOptions)
-      : this.setState(prevState => ({
-          contacts: [newContact, ...prevState.contacts],
-        }));
+    setContacts(contacts => [{ ...newContact, id: nanoid() }, ...contacts]);
   };
 
-  deleteContact = contactId => {
-    this.setState(prevState => {
-      return {
-        contacts: prevState.contacts.filter(
-          contact => contact.id !== contactId
-        ),
-      };
-    });
+  const deleteContact = contactId => {
+    setContacts(contacts.filter(contact => contact.id !== contactId));
   };
 
-  changeFilter = e => {
-    this.setState({ filter: e.target.value.toLowerCase().trim() });
+  const changeFilter = e => {
+    setFilter(e.target.value.toLowerCase().trim());
   };
 
-  getVisibleContacts = () => {
-    const { filter, contacts } = this.state;
+  const getVisibleContacts = () => {
     const normalizedFilter = filter.toLowerCase();
 
-    return contacts.filter(contact =>
+    const filteredContacts = contacts.filter(contact =>
       contact.name.toLowerCase().trim().includes(normalizedFilter)
     );
+
+    if (normalizedFilter && !filteredContacts.length) {
+      toast.warn(`No contacts matching your request`, toastifyOptions);
+    }
+
+    return filteredContacts;
   };
 
-  render() {
-    const { filter } = this.state;
-    const visibleContacts = this.getVisibleContacts();
-    return (
-      <Layout>
-        <Section title="Phonebook">
-          <ContactForm onAddContact={this.addContact} />
-          <Header title="Contacts" />
-          <Filter value={filter} onChange={this.changeFilter} />
-          <ContactList
-            onDelete={this.deleteContact}
-            contacts={visibleContacts}
-          />
-        </Section>
-        <ToastContainer />
-        <GlobalStyle />
-      </Layout>
-    );
-  }
-}
+  return (
+    <Layout>
+      <Section title="Phonebook">
+        <ContactForm onAddContact={addContact} />
 
+        {contacts.length > 0 && (
+          <>
+            <Title title="Contacts" />
+            <Filter value={filter} onChange={changeFilter} />
+            <ContactList
+              onDelete={deleteContact}
+              contacts={getVisibleContacts()}
+            />
+          </>
+        )}
+      </Section>
+      <ToastContainer />
+      <GlobalStyle />
+    </Layout>
+  );
+}
